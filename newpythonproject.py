@@ -1,12 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-"""
-"""
-Changes done:
-1. Changed train/test/valid split
-2. Changed number of input classes from 10 to 2 ( for Y and dense to one hot )
 
-"""
 import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
@@ -79,8 +72,8 @@ test_data = data[trainSize + validSize:, :]
 test_label = label[trainSize + validSize:, :]
 
 # Define Placeholders:
-X = tf.placeholder("float", [None, 2352])
-Y = tf.placeholder("float", [None, 2]) # changed num classes to 2
+X = tf.placeholder("float", [None, 2352], name = "X")
+Y = tf.placeholder("float", [None, 2], name = "Y") # changed num classes to 2
 
 # define number of columns in input data for layer 1
 input_cols = data.shape[1]
@@ -126,6 +119,9 @@ init = tf.global_variables_initializer()
 losses = []
 validAcc = []
 
+# Create a Saver object
+saver = tf.train.Saver()
+
 # Start training
 with tf.Session() as sess:
     # Run the initializer
@@ -159,16 +155,22 @@ with tf.Session() as sess:
             # run the session on predicter by feeding the validation data
             # append the current loss value to the losses list
             # append the validattion accuracy to the validAcc list
-
+            
+            # Create a checkpoint in every iteration
+        saver.save(sess, 'model_iter', global_step=iteration)
     print("*" * 22 + "Finished Training" + "*" * 22)
 
     prediction = sess.run(predicter, feed_dict={X: test_data, Y: test_label})  # run session using test data as feed
     print(prediction)
+    
+    
     correct_labels = np.argmax(test_label, axis=1)  # obtain test labels
 
     test_accuracy = np.mean((prediction == correct_labels)) * 100  # calculate test accuracy
 
     print("Final accuracy: " + str(np.round(test_accuracy, 2)) + "%")
+
+    saver.save(sess, 'model_final')
 
     # Plot losses vs training step during training
     plt.figure()
@@ -176,6 +178,10 @@ with tf.Session() as sess:
     plt.title("Training losses")
     plt.ylabel('Loss')
     plt.show()
+    
+    
+    
+    
 
     # Plot validation accuracy vs training step during training
     plt.figure()
@@ -190,28 +196,37 @@ with tf.Session() as sess:
 
 #display result
 
-    hog = cv2.HOGDescriptor()
-    hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
-    hogParams = {'winStride': (8, 8), 'padding': (32, 32), 'scale': 1.05}
+hog = cv2.HOGDescriptor()
+hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
+hogParams = {'winStride': (8, 8), 'padding': (32, 32), 'scale': 1.05}
 
-    cap = cv2.VideoCapture("/home/jite/Downloads/ManU.mp4")
+cap = cv2.VideoCapture("/home/jite/Downloads/ManU.mp4")
 
+tf.reset_default_graph()  
+
+with tf.Session() as sess:
+    
+    #Restore the parameters of the network by calling restore on this saver
+    new_saver = tf.train.import_meta_graph("model_final.meta")
+    new_saver.restore(sess, tf.train.latest_checkpoint('./'))
+    
     counter = 0
     while 1:
         ret, img = cap.read()
         (rects, weights) = hog.detectMultiScale(img, **hogParams)            
 
         for (x, y, w, h) in rects:
-            
+
             roi = img[y:y+h, x:x+w]
             roi = cv2.resize(roi, (28, 28))
             cv2.imwrite('/home/jite/Downloads/video2/video'+str(counter)+'.png',roi)
-            
+
             images = []
             images.append(roi.ravel())
             y_test_images = np.zeros((1, 2)) 
-            prediction = sess.run(predicter, feed_dict={X: images, Y: y_test_images})  # run session ROI as feed
-            print(prediction)
+            
+#            prediction = sess.run(predicter, feed_dict={X: images, Y: y_test_images})  # run session ROI as feed
+#            print(prediction)
 
             if prediction[0] < 1:
                 cv2.rectangle(img,(x,y),(x + w,y + h),(0,255,0),1)
@@ -223,8 +238,8 @@ with tf.Session() as sess:
                 font = cv2.FONT_HERSHEY_PLAIN
                 cv2.putText(img,'Chelsea',(x + w, y + h), font, 0.7,(200,200,255),1,cv2.LINE_AA)
                 cv2.putText(img,'0% confidence',(x + w, y), font, 0.7,(200,200,255),1,cv2.LINE_AA)
-                
-                
+
+
 
         cv2.imshow('img',img)
         counter = counter + 1
@@ -233,8 +248,8 @@ with tf.Session() as sess:
         if k == 27:
             break
 
-    cap.release()
-    cv2.destroyAllWindows()
+cap.release()
+cv2.destroyAllWindows()
 
 
 # test the model on the test_data
