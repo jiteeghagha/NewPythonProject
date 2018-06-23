@@ -5,6 +5,7 @@ import tensorflow as tf
 import matplotlib.pyplot as plt
 import pandas as pd
 import cv2
+import math
 
 # convert grayscale image to array
 def image_to_array(img):
@@ -58,7 +59,7 @@ data, labelA = ReadCSV('football_group.csv')
 label = dense_to_one_hot(labelA)
 print("Checking the dataset shapes: pixel data " + str(data.shape), " , one hot encoded labels: " + str(label.shape))
 
-trainSize = 137 # As number of samples are only 177
+trainSize = 212 # As number of samples are only 177
 validSize = 20  # Split used 137/20/20
 
 
@@ -197,32 +198,27 @@ with tf.Session() as sess:
 
             roi = img[y:y+h, x:x+w]
             roi = cv2.resize(roi, (28, 28))
-            cv2.imwrite('/home/jite/Downloads/video2/video'+str(counter)+'.png',roi)
+#            cv2.imwrite('/home/jite/Downloads/video2/video'+str(counter)+'.png',roi)
 
             images = []
             images.append(roi.ravel())
             y_test_images = np.zeros((1, 2)) 
 
             prediction = sess.run(output, feed_dict={X: images})  # run session ROI as feed
-            print(prediction)
-            
-            str(prediction).strip('[]')
-            
-            cv2.rectangle(img,(x,y),(x + w,y + h),(0,255,0),1)
-            font = cv2.FONT_HERSHEY_PLAIN
-            cv2.putText(img,'Manu',(x + w, y + h), font, 0.7,(200,200,255),1,cv2.LINE_AA)
-            cv2.putText(img,str(prediction).strip('[]'),(x + w, y), font, 0.7,(200,200,255),1,cv2.LINE_AA)            
+            prediction = prediction*100
+#            print(prediction)
 
-#            if prediction[0] < 1:
+
+            if prediction[0][1] > 90.0:
 #                cv2.rectangle(img,(x,y),(x + w,y + h),(0,255,0),1)
-#                font = cv2.FONT_HERSHEY_PLAIN
-#                cv2.putText(img,'Manu',(x + w, y + h), font, 0.7,(200,200,255),1,cv2.LINE_AA)
-#                cv2.putText(img,'0% confidence',(x + w, y), font, 0.7,(200,200,255),1,cv2.LINE_AA)
-#            else:
+                font = cv2.FONT_HERSHEY_PLAIN
+                t = math.ceil(prediction[0][1])
+                cv2.putText(img,'Chelsea '+str(t)+"%",(x, y), font, 0.7,(200,200,255),1,cv2.LINE_AA)
+            else:
 #                cv2.rectangle(img,(x,y),(x + w,y + h),(0,255,0),1)
-#                font = cv2.FONT_HERSHEY_PLAIN
-#                cv2.putText(img,'Chelsea',(x + w, y + h), font, 0.7,(200,200,255),1,cv2.LINE_AA)
-#                cv2.putText(img,'0% confidence',(x + w, y), font, 0.7,(200,200,255),1,cv2.LINE_AA)
+                font = cv2.FONT_HERSHEY_PLAIN
+                t = math.ceil(prediction[0][0])                
+                cv2.putText(img,'Manu '+str(100-t)+"%",(x, y ), font, 0.7,(200,200,255),1,cv2.LINE_AA)
 
 
 
