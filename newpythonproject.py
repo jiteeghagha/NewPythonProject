@@ -6,8 +6,6 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import cv2
 
-
-
 # convert grayscale image to array
 def image_to_array(img):
     return np.array(img, dtype=np.uint8)
@@ -119,9 +117,6 @@ init = tf.global_variables_initializer()
 losses = []
 validAcc = []
 
-# Create a Saver object
-saver = tf.train.Saver()
-
 # Start training
 with tf.Session() as sess:
     # Run the initializer
@@ -156,8 +151,7 @@ with tf.Session() as sess:
             # append the current loss value to the losses list
             # append the validattion accuracy to the validAcc list
             
-            # Create a checkpoint in every iteration
-        saver.save(sess, 'model_iter', global_step=iteration)
+
     print("*" * 22 + "Finished Training" + "*" * 22)
 
     prediction = sess.run(predicter, feed_dict={X: test_data, Y: test_label})  # run session using test data as feed
@@ -169,9 +163,7 @@ with tf.Session() as sess:
     test_accuracy = np.mean((prediction == correct_labels)) * 100  # calculate test accuracy
 
     print("Final accuracy: " + str(np.round(test_accuracy, 2)) + "%")
-
-    saver.save(sess, 'model_final')
-
+    
     # Plot losses vs training step during training
     plt.figure()
     plt.plot(losses)
@@ -179,10 +171,6 @@ with tf.Session() as sess:
     plt.ylabel('Loss')
     plt.show()
     
-    
-    
-    
-
     # Plot validation accuracy vs training step during training
     plt.figure()
     plt.plot(validAcc)
@@ -192,24 +180,14 @@ with tf.Session() as sess:
 
     print("Confusion matrix for the test set")
     print(pd.crosstab(correct_labels, prediction, rownames=['Actual'], colnames=['Predicted'], margins=True))
+    #display result
 
+    hog = cv2.HOGDescriptor()
+    hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
+    hogParams = {'winStride': (8, 8), 'padding': (32, 32), 'scale': 1.05}
 
-#display result
+    cap = cv2.VideoCapture("/home/jite/Downloads/ManU.mp4")    
 
-hog = cv2.HOGDescriptor()
-hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
-hogParams = {'winStride': (8, 8), 'padding': (32, 32), 'scale': 1.05}
-
-cap = cv2.VideoCapture("/home/jite/Downloads/ManU.mp4")
-
-tf.reset_default_graph()  
-
-with tf.Session() as sess:
-    
-    #Restore the parameters of the network by calling restore on this saver
-    new_saver = tf.train.import_meta_graph("model_final.meta")
-    new_saver.restore(sess, tf.train.latest_checkpoint('./'))
-    
     counter = 0
     while 1:
         ret, img = cap.read()
@@ -224,20 +202,27 @@ with tf.Session() as sess:
             images = []
             images.append(roi.ravel())
             y_test_images = np.zeros((1, 2)) 
-            
-#            prediction = sess.run(predicter, feed_dict={X: images, Y: y_test_images})  # run session ROI as feed
-#            print(prediction)
 
-            if prediction[0] < 1:
-                cv2.rectangle(img,(x,y),(x + w,y + h),(0,255,0),1)
-                font = cv2.FONT_HERSHEY_PLAIN
-                cv2.putText(img,'Manu',(x + w, y + h), font, 0.7,(200,200,255),1,cv2.LINE_AA)
-                cv2.putText(img,'0% confidence',(x + w, y), font, 0.7,(200,200,255),1,cv2.LINE_AA)
-            else:
-                cv2.rectangle(img,(x,y),(x + w,y + h),(0,255,0),1)
-                font = cv2.FONT_HERSHEY_PLAIN
-                cv2.putText(img,'Chelsea',(x + w, y + h), font, 0.7,(200,200,255),1,cv2.LINE_AA)
-                cv2.putText(img,'0% confidence',(x + w, y), font, 0.7,(200,200,255),1,cv2.LINE_AA)
+            prediction = sess.run(output, feed_dict={X: images})  # run session ROI as feed
+            print(prediction)
+            
+            str(prediction).strip('[]')
+            
+            cv2.rectangle(img,(x,y),(x + w,y + h),(0,255,0),1)
+            font = cv2.FONT_HERSHEY_PLAIN
+            cv2.putText(img,'Manu',(x + w, y + h), font, 0.7,(200,200,255),1,cv2.LINE_AA)
+            cv2.putText(img,str(prediction).strip('[]'),(x + w, y), font, 0.7,(200,200,255),1,cv2.LINE_AA)            
+
+#            if prediction[0] < 1:
+#                cv2.rectangle(img,(x,y),(x + w,y + h),(0,255,0),1)
+#                font = cv2.FONT_HERSHEY_PLAIN
+#                cv2.putText(img,'Manu',(x + w, y + h), font, 0.7,(200,200,255),1,cv2.LINE_AA)
+#                cv2.putText(img,'0% confidence',(x + w, y), font, 0.7,(200,200,255),1,cv2.LINE_AA)
+#            else:
+#                cv2.rectangle(img,(x,y),(x + w,y + h),(0,255,0),1)
+#                font = cv2.FONT_HERSHEY_PLAIN
+#                cv2.putText(img,'Chelsea',(x + w, y + h), font, 0.7,(200,200,255),1,cv2.LINE_AA)
+#                cv2.putText(img,'0% confidence',(x + w, y), font, 0.7,(200,200,255),1,cv2.LINE_AA)
 
 
 
@@ -248,9 +233,8 @@ with tf.Session() as sess:
         if k == 27:
             break
 
-cap.release()
-cv2.destroyAllWindows()
-
+    cap.release()
+    cv2.destroyAllWindows()
 
 # test the model on the test_data
 # report final Accuracy rate
