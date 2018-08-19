@@ -7,7 +7,6 @@ import pandas as pd
 import cv2
 import math
 
-# convert grayscale image to array
 def getROI_Array(img):
     hog = cv2.HOGDescriptor()
     hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
@@ -122,11 +121,14 @@ init = tf.global_variables_initializer()
 losses = []
 validAcc = []
 
+#ave the graph and values of all the parameters for which we shall be creating an instance of tf.train.Saver() class
+saver = tf.train.Saver()
+
 # Start training
 with tf.Session() as sess:
     # Run the initializer
     sess.run(init)
-
+    saver.save(sess, 'saved_model', global_step=2)
     for iteration in range(2):  # no. of epochs is 2
         for i in range(0, trainSize, batchSize):
             print("Iteration: " + str(iteration) + " *** Batch: " + str(i))
@@ -220,7 +222,7 @@ with tf.Session() as sess:
 
                 prediction = sess.run(output, feed_dict={X: images})  # run session ROI as feed
                 prediction = prediction*100
-    #            print(prediction)
+                print(output)
 
                 if prediction[0][1] > 75.0:
                     cv2.rectangle(img,(x,y),(x + w,y + h),(0,255,0),1)
