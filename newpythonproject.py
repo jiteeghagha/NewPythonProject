@@ -8,8 +8,12 @@ import cv2
 import math
 
 # convert grayscale image to array
-def image_to_array(img):
-    return np.array(img, dtype=np.uint8)
+def getROI_Array(img):
+    hog = cv2.HOGDescriptor()
+    hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
+    hogParams = {'winStride': (8, 8), 'padding': (32, 32), 'scale': 1.05}
+    (rect, weights) = hog.detectMultiScale(img, **hogParams)  
+    return rect
     
 # Import Required Libraries here
 def ReadCSV(fileName):
@@ -59,8 +63,8 @@ data, labelA = ReadCSV('football_group.csv')
 label = dense_to_one_hot(labelA)
 print("Checking the dataset shapes: pixel data " + str(data.shape), " , one hot encoded labels: " + str(label.shape))
 
-trainSize = 212 # As number of samples are only 177
-validSize = 20  # Split used 137/20/20
+trainSize = 1945 # As number of samples are only 177
+validSize = 100  # Split used 137/20/20
 
 
 train_data = data[:trainSize, :]
@@ -78,9 +82,9 @@ Y = tf.placeholder("float", [None, 2], name = "Y") # changed num classes to 2
 input_cols = data.shape[1]
 
 # define hidden units in each layer
-hidden_layer_1 = 512
-hidden_layer_2 = 256
-hidden_layer_3 = 64
+hidden_layer_1 = 300
+hidden_layer_2 = 300
+hidden_layer_3 = 50
 
 # define number of classes in output data for last layer
 output_cols = label.shape[1]
@@ -110,7 +114,7 @@ output = tf.nn.softmax(output)
 predicter = tf.argmax(output, 1)
 
 # run and initialize the TF session
-batchSize = 16 # changed batch size to 16
+batchSize = 100 # changed batch size to 16
 
 # Initialize the variables (i.e. assign their default value)
 init = tf.global_variables_initializer()
@@ -156,9 +160,8 @@ with tf.Session() as sess:
     print("*" * 22 + "Finished Training" + "*" * 22)
 
     prediction = sess.run(predicter, feed_dict={X: test_data, Y: test_label})  # run session using test data as feed
-    print(prediction)
-    
-    
+#    print(prediction)
+        
     correct_labels = np.argmax(test_label, axis=1)  # obtain test labels
 
     test_accuracy = np.mean((prediction == correct_labels)) * 100  # calculate test accuracy
@@ -181,47 +184,64 @@ with tf.Session() as sess:
 
     print("Confusion matrix for the test set")
     print(pd.crosstab(correct_labels, prediction, rownames=['Actual'], colnames=['Predicted'], margins=True))
+    
+    
     #display result
-
-    hog = cv2.HOGDescriptor()
-    hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
-    hogParams = {'winStride': (8, 8), 'padding': (32, 32), 'scale': 1.05}
 
     cap = cv2.VideoCapture("/home/jite/Downloads/ManU.mp4")    
 
     counter = 0
+    frameCount = 0
+    rect = []
+    roiList = []
+    img = []
+    c = 0
+    temp = []
+    
+    rect, img = cap.read()        
+
     while 1:
-        ret, img = cap.read()
-        (rects, weights) = hog.detectMultiScale(img, **hogParams)            
+        rect, img = cap.read()
+        
+        if(frameCount%20 == 0):
+            rect = getROI_Array(img)   
+            del roiList[:]
+            temp.append(rect)
+            for (x, y, w, h) in rect:
 
-        for (x, y, w, h) in rects:
+                roi = img[y:y+h, x:x+w]
+                roi = cv2.resize(roi, (28, 28))
+                roiList.append(roi)
+    #            cv2.imwrite('/home/jite/Downloads/video2/video'+str(counter)+'.png',roi)
 
-            roi = img[y:y+h, x:x+w]
-            roi = cv2.resize(roi, (28, 28))
-#            cv2.imwrite('/home/jite/Downloads/video2/video'+str(counter)+'.png',roi)
+                images = []
+                images.append(roi.ravel())
+                y_test_images = np.zeros((1, 2)) 
 
-            images = []
-            images.append(roi.ravel())
-            y_test_images = np.zeros((1, 2)) 
+                prediction = sess.run(output, feed_dict={X: images})  # run session ROI as feed
+                prediction = prediction*100
+    #            print(prediction)
 
-            prediction = sess.run(output, feed_dict={X: images})  # run session ROI as feed
-            prediction = prediction*100
-#            print(prediction)
-
-
-            if prediction[0][1] > 90.0:
-#                cv2.rectangle(img,(x,y),(x + w,y + h),(0,255,0),1)
-                font = cv2.FONT_HERSHEY_PLAIN
-                t = math.ceil(prediction[0][1])
-                cv2.putText(img,'Chelsea '+str(t)+"%",(x, y), font, 0.7,(200,200,255),1,cv2.LINE_AA)
-            else:
-#                cv2.rectangle(img,(x,y),(x + w,y + h),(0,255,0),1)
-                font = cv2.FONT_HERSHEY_PLAIN
-                t = math.ceil(prediction[0][0])                
-                cv2.putText(img,'Manu '+str(100-t)+"%",(x, y ), font, 0.7,(200,200,255),1,cv2.LINE_AA)
-
-
-
+                if prediction[0][1] > 75.0:
+                    cv2.rectangle(img,(x,y),(x + w,y + h),(0,255,0),1)
+                    font = cv2.FONT_HERSHEY_PLAIN
+                    t = math.ceil(prediction[0][1])
+                    cv2.putText(img,'Chelsea '+str(t)+"%",(x, y), font, 0.7,(200,200,255),1,cv2.LINE_AA)
+    #                cv2.imwrite('/home/jite/Videos/ann/pos/'+str(counter)+'.png',roi)
+                else:
+                    cv2.rectangle(img,(x,y),(x + w,y + h),(0,255,0),1)
+                    font = cv2.FONT_HERSHEY_PLAIN
+                    t = math.ceil(prediction[0][0])                
+                    cv2.putText(img,'Manu '+str(t)+"%",(x, y ), font, 0.7,(200,200,255),1,cv2.LINE_AA)                    
+                    cv2.imwrite('/home/jite/Videos/ann/neg/'+str(counter)+'.png',roi)
+            
+        if len(roiList) > 3:
+            if not type(rect) is bool:
+                for r in rect:
+                    t = tuple(r)
+                    print(t)
+                    
+        frameCount = frameCount + 1          
         cv2.imshow('img',img)
         counter = counter + 1
 
@@ -229,8 +249,8 @@ with tf.Session() as sess:
         if k == 27:
             break
 
-    cap.release()
-    cv2.destroyAllWindows()
+cap.release()
+cv2.destroyAllWindows()
 
 # test the model on the test_data
 # report final Accuracy rate
