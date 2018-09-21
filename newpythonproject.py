@@ -10,7 +10,7 @@ import math
 def getROI_Array(img):
     hog = cv2.HOGDescriptor()
     hog.setSVMDetector(cv2.HOGDescriptor_getDefaultPeopleDetector())
-    hogParams = {'winStride': (8, 8), 'padding': (32, 32), 'scale': 1.05}
+    hogParams = {'winStride': (8, 8), 'padding': (16, 16), 'scale': 1.05}
     (rect, weights) = hog.detectMultiScale(img, **hogParams)  
     return rect
     
@@ -47,13 +47,46 @@ def dense_to_one_hot(labels_dense, num_classes=2):
 
 # Define 3 layers with 4th layer being the output layer
 def model(X):
-    # define your NN model here
-    layer_1 = tf.nn.relu(tf.matmul(X, w1))
-    layer_2 = tf.nn.relu(tf.matmul(layer_1, w2))
-    layer_3 = tf.nn.relu(tf.matmul(layer_2, w3))
-    output_layer = tf.matmul(layer_3, w4)
-    return output_layer
-    # and so on
+    # Input Layer
+    input_layer = tf.reshape(X, [-1, 28, 28, 3])
+
+    # Convolutional Layer #1
+    conv1 = tf.layers.conv2d(
+      inputs=input_layer,
+      filters=32,
+      kernel_size=[5, 5],
+      padding="same",
+      activation=tf.nn.relu)
+
+    # Pooling Layer #1
+    pool1 = tf.layers.max_pooling2d(inputs=conv1, pool_size=[2, 2], strides=2)
+
+    # Convolutional Layer #2 and Pooling Layer #2
+    conv2 = tf.layers.conv2d(
+      inputs=pool1,
+      filters=64,
+      kernel_size=[5, 5],
+      padding="same",
+      activation=tf.nn.relu)
+    pool2 = tf.layers.max_pooling2d(inputs=conv2, pool_size=[2, 2], strides=2)
+
+    # Dense Layer
+    pool2_flat = tf.reshape(pool2, [-1, 7 * 7 * 64])
+    dense = tf.layers.dense(inputs=pool2_flat, units=1024, activation=tf.nn.relu)
+    dropout = tf.layers.dropout(
+      inputs=dense, rate=0.4, training=True)
+
+    # Logits Layer
+    logits = tf.layers.dense(inputs=dropout, units=2)
+
+    return logits
+
+    # # define your NN model here
+    # layer_1 = tf.nn.relu(tf.matmul(X, w1))
+    # layer_2 = tf.nn.relu(tf.matmul(layer_1, w2))
+    # layer_3 = tf.nn.relu(tf.matmul(layer_2, w3))
+    # output_layer = tf.matmul(layer_3, w4)
+    # return output_layer    
 
 
 data, labelA = ReadCSV('football_group.csv')
@@ -62,8 +95,8 @@ data, labelA = ReadCSV('football_group.csv')
 label = dense_to_one_hot(labelA)
 print("Checking the dataset shapes: pixel data " + str(data.shape), " , one hot encoded labels: " + str(label.shape))
 
-trainSize = 1945 # As number of samples are only 177
-validSize = 100  # Split used 137/20/20
+trainSize = 127 # As number of samples are only 177
+validSize = 30  # Split used 137/20/20
 
 
 train_data = data[:trainSize, :]
@@ -113,7 +146,7 @@ output = tf.nn.softmax(output)
 predicter = tf.argmax(output, 1)
 
 # run and initialize the TF session
-batchSize = 100 # changed batch size to 16
+batchSize = 10 # changed batch size to 16
 
 # Initialize the variables (i.e. assign their default value)
 init = tf.global_variables_initializer()
@@ -133,26 +166,21 @@ with tf.Session() as sess:
         for i in range(0, trainSize, batchSize):
             print("Iteration: " + str(iteration) + " *** Batch: " + str(i))
 
-            batch_x, batch_y = train_data[i:(i + batchSize), :], train_label[i:(i + batchSize),
-                                                                 :]  # make x, y batches using batchsize
+            batch_x, batch_y = train_data[i:(i + batchSize), :], train_label[i:(i + batchSize), :]  # make x, y batches using batchsize
 
-            _, loss_value = sess.run([optimizer, loss],
-                                     feed_dict={X: batch_x, Y: batch_y})  # run optimizer and obtain loss value
+            _, loss_value = sess.run([optimizer, loss], feed_dict={X: batch_x, Y: batch_y})  # run optimizer and obtain loss value
 
             losses.append(loss_value)  # store loss value in a list
 
-            prediction = sess.run(predicter,
-                                  feed_dict={X: valid_data, Y: valid_label})  # obtain predictions for validation data
+            prediction = sess.run(predicter, feed_dict={X: valid_data, Y: valid_label})  # obtain predictions for validation data
 
-            correct_labels = np.argmax(valid_label,
-                                       axis=1)  # obtain correct labels from one hot encoded validation set labels
+            correct_labels = np.argmax(valid_label, axis=1)  # obtain correct labels from one hot encoded validation set labels
 
             valid_accuracy = np.mean((prediction == correct_labels)) * 100  # calculate validation accuracy
 
             validAcc.append(valid_accuracy)  # store validation accuracy in valid acc array
 
-            print("Step: " + str(i / batchSize) + " *** Loss: " + str(np.round(loss_value, 4)) + " *** Validation accuracy: ",
-                  str(np.round(valid_accuracy, 1)) + "%")
+            print("Step: " + str(i / batchSize) + " *** Loss: " + str(np.round(loss_value, 4)) + " *** Validation accuracy: ", str(np.round(valid_accuracy, 1)) + "%")
             # run the session on optimizer by feeding the minibatches of placeholders
             # run the session on predicter by feeding the validation data
             # append the current loss value to the losses list
@@ -162,7 +190,9 @@ with tf.Session() as sess:
     print("*" * 22 + "Finished Training" + "*" * 22)
 
     prediction = sess.run(predicter, feed_dict={X: test_data, Y: test_label})  # run session using test data as feed
-#    print(prediction)
+    print("###########")
+    print(prediction)
+    print("###########")
         
     correct_labels = np.argmax(test_label, axis=1)  # obtain test labels
 
@@ -190,7 +220,8 @@ with tf.Session() as sess:
     
     #display result
 
-    cap = cv2.VideoCapture("/home/jite/Downloads/ManU.mp4")    
+    # cap = cv2.VideoCapture("/home/jite/Downloads/manuTest010.mp4")    
+    cap = cv2.VideoCapture("/home/jite/Videos/ManU.mp4")    
 
     counter = 0
     frameCount = 0
@@ -205,7 +236,7 @@ with tf.Session() as sess:
     while 1:
         rect, img = cap.read()
         
-        if(frameCount%20 == 0):
+        if(frameCount%1 == 0):
             rect = getROI_Array(img)   
             del roiList[:]
             temp.append(rect)
@@ -222,32 +253,32 @@ with tf.Session() as sess:
 
                 prediction = sess.run(output, feed_dict={X: images})  # run session ROI as feed
                 prediction = prediction*100
-                print(output)
+                # print(output)
 
-                if prediction[0][1] > 75.0:
+                if prediction[0][1] > 75:
                     cv2.rectangle(img,(x,y),(x + w,y + h),(0,255,0),1)
                     font = cv2.FONT_HERSHEY_PLAIN
                     t = math.ceil(prediction[0][1])
                     cv2.putText(img,'Chelsea '+str(t)+"%",(x, y), font, 0.7,(200,200,255),1,cv2.LINE_AA)
-    #                cv2.imwrite('/home/jite/Videos/ann/pos/'+str(counter)+'.png',roi)
+                    # cv2.imwrite('/home/jite/Videos/videos/ann/pos/'+str(counter)+'.png',roi)
                 else:
                     cv2.rectangle(img,(x,y),(x + w,y + h),(0,255,0),1)
                     font = cv2.FONT_HERSHEY_PLAIN
                     t = math.ceil(prediction[0][0])                
                     cv2.putText(img,'Manu '+str(t)+"%",(x, y ), font, 0.7,(200,200,255),1,cv2.LINE_AA)                    
-                    cv2.imwrite('/home/jite/Videos/ann/neg/'+str(counter)+'.png',roi)
+                    # cv2.imwrite('/home/jite/Videos/videos/ann/neg/'+str(counter)+'.png',roi)
             
-        if len(roiList) > 3:
-            if not type(rect) is bool:
-                for r in rect:
-                    t = tuple(r)
-                    print(t)
+        # if len(roiList) > 3:
+        #     if not type(rect) is bool:
+        #         for r in rect:
+        #             t = tuple(r)
+        #             print(t)
                     
         frameCount = frameCount + 1          
         cv2.imshow('img',img)
         counter = counter + 1
 
-        k = cv2.waitKey(30) & 0xff
+        k = cv2.waitKey(1) & 0xff
         if k == 27:
             break
 
